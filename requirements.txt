@@ -4,10 +4,7 @@ pandas
 folium
 streamlit_folium
 requests
-os
 shapely.geometry
 plotly.express
-json
 numpy
 plotly.graph_objects
-math

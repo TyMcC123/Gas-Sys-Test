@@ -643,14 +643,15 @@ def compute_ts_costs_eor(
 # ---------------------------------------------
 # 📂 LOAD DATA
 # ---------------------------------------------
-data_path = r"E:\GIS Work Files\GIS drive 10_24\GIS Drive Files\GasificationSystems\AllGasSysData3.csv"
+GITHUB_RAW = "https://raw.githubusercontent.com/TyMcC123/Gas-Sys-Test/main"
+data_path = f"{GITHUB_RAW}/AllGasSysData3.csv"
 counties = load_counties()
 biomass_df = load_data(data_path)
-co2scom_path = r"E:\Python Test\co2scom.csv"
-co2tcom_path = r"E:\Python Test\co2tcom.csv"
-formations_path = r"E:\Python Test\formations.csv"
-co2ecom_path = r"E:\Python Test\co2_e_com.csv"
-source_site_coords_path = r"E:\Python Test\source_site_coords.csv"
+co2scom_path = f"{GITHUB_RAW}/co2scom.csv"
+co2tcom_path = f"{GITHUB_RAW}/co2tcom.csv"
+formations_path = f"{GITHUB_RAW}/formations.csv"
+co2ecom_path = f"{GITHUB_RAW}/co2_e_com.csv"
+source_site_coords_path = f"{GITHUB_RAW}/source_site_coords.csv"
 
 _load_errors = []
 

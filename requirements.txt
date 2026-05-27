@@ -1,0 +1,14 @@
+streamlit
+geopandas
+pandas
+folium
+streamlit_folium
+requests
+zipfile
+os
+shapely.geometry
+plotly.express
+json
+numpy
+plotly.graph_objects
+math

@@ -4,7 +4,6 @@ pandas
 folium
 streamlit_folium
 requests
-zipfile
 os
 shapely.geometry
 plotly.express

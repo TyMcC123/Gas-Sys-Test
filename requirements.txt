@@ -2,9 +2,7 @@ streamlit
 geopandas
 pandas
 folium
-streamlit_folium
+streamlit-folium
 requests
-shapely.geometry
-plotly.express
 numpy
-plotly.graph_objects
+plotly

@@ -68,10 +68,12 @@ def build_choropleth_layer(merged_gdf, states_gdf, counties_gdf, layer_key):
             map_style="carto-positron",
             opacity=0.8,
             hover_name="NAME",
-            hover_data={"State": True, "Gasification Plants": True,
-                        "Total Biomass (dry tons)": ":,.0f", "Plant Category": True},
+            custom_data=["Gasification Plants"],
             center={"lat": 37.8, "lon": -96},
             zoom=3.2,
+        )
+        data_fig.update_traces(
+            hovertemplate="<b>%{hovertext}</b><br>Gasification Plants: %{customdata[0]:,.0f}<extra></extra>"
         )
         for t in data_fig.data:
             t.marker.line.width = 0.3
@@ -117,10 +119,13 @@ def build_choropleth_layer(merged_gdf, states_gdf, counties_gdf, layer_key):
             map_style="carto-positron",
             opacity=0.8,
             hover_name="NAME",
-            hover_data={"State": True, col_name: ":.2f", "_val": False},
+            custom_data=["_val"],
             center={"lat": 37.8, "lon": -96},
             zoom=3.2,
             labels={"_val": col_name},
+        )
+        data_fig.update_traces(
+            hovertemplate=f"<b>%{{hovertext}}</b><br>{col_name}: %{{customdata[0]:.2f}}<extra></extra>"
         )
         data_fig.update_coloraxes(colorbar_title=cb_title)
         for t in data_fig.data:
@@ -1379,14 +1384,12 @@ if apply_filters:
         map_style="carto-positron",
         opacity=0.8,
         hover_name="NAME",
-        hover_data={
-            "State": True,
-            "Gasification Plants": True,
-            "Total Biomass (dry tons)": ":,.0f",
-            "Plant Category": True,
-        },
+        custom_data=["Gasification Plants"],
         center={"lat": 37.8, "lon": -96},
         zoom=3.2,
+    )
+    biomass_fig.update_traces(
+        hovertemplate="<b>%{hovertext}</b><br>Gasification Plants: %{customdata[0]:,.0f}<extra></extra>"
     )
 
     for t in biomass_fig.data:
@@ -1504,9 +1507,9 @@ if apply_filters:
 # ---------------------------------------------
 _layer_labels = {
     "plants":    "🏭 Gasification Plants",
-    "lcoh":      "💲 LCOH ($/kg H₂)",
-    "lca":       "🌿 Total LCA (kg CO₂e/kg H₂)",
     "transport": "🚛 Biomass Transportation Cost ($/dt)",
+    "lca":       "🌿 Total LCA (kg CO₂e/kg H₂)",
+    "lcoh":      "💲 LCOH ($/kg H₂)",
 }
 _selected_layer = st.radio(
     label="Select map layer:",
@@ -1578,42 +1581,18 @@ if "_map_plants_df" in st.session_state:
             "T&S Cost ($/t)": "${:,.2f}",
         }
         _fmt = {k: v for k, v in _all_formats.items() if k in _display_df.columns}
-        def highlight_ts_cols(styler):
-            ts_highlight_cols = [
-                c for c in [
-                    "Best Formation", "Best Formation State", "Best Formation Province",
-                    "Raw Distance (mi)", "Transport Cost ($/t)", "Storage Cost ($/t)", "T&S Cost ($/t)"
-                ]
-                if c in styler.data.columns
-            ]
-            transport_highlight_cols = [
-                c for c in [
-                    "Trucks Per Day", "Total Feedstock Transportation Cost ($/dt)"
-                ]
-                if c in styler.data.columns
-            ]
-            lca_highlight_cols = [
-                c for c in [
-                    "Feedstock Weighted Average LCA (kg CO2e/dt)",
-                    "Total LCA (kg CO2e/kg H2)",
-                    "LCOH ($/kg H2)",
-                ]
-                if c in styler.data.columns
-            ]
-            first_8_cols = list(styler.data.columns[:8])
-            return styler.set_properties(
-                subset=first_8_cols,
-                **{"background-color": "#d4edda", "color": "black"}
-            ).set_properties(
-                subset=ts_highlight_cols,
-                **{"background-color": "#d0eaf8", "color": "black"}
-            ).set_properties(
-                subset=transport_highlight_cols,
-                **{"background-color": "#fff9c4", "color": "black"}
-            ).set_properties(
-                subset=lca_highlight_cols,
-                **{"background-color": "#ffe0b2", "color": "black"}
-            ).set_properties(
+        def banded_rows(styler):
+            # Alternating light/dark gray row bands for readability, in place of
+            # the old per-column-group color coding. Uses positional row order
+            # (not the DataFrame index, which isn't sequential after sorting)
+            # so the stripe pattern always alternates visually.
+            def _stripe(data):
+                styles = pd.DataFrame("", index=data.index, columns=data.columns)
+                for pos in range(len(data)):
+                    color = "#f2f2f2" if pos % 2 == 0 else "#d9d9d9"
+                    styles.iloc[pos] = f"background-color: {color}; color: black"
+                return styles
+            return styler.apply(_stripe, axis=None).set_properties(
                 **{"border": "1px solid black"}
             )
 
@@ -1629,13 +1608,13 @@ if "_map_plants_df" in st.session_state:
         }
 
         _display_col_order = [
-            "County", "State", "Total Biomass (dry tons)", "Gasification Plants",
-            "Raw Biomass (tons)", "Pretreated Biomass (tons)",
+            "County", "State", "Gasification Plants",
+            "Pretreated Biomass (tons)",
             "Feedstock Weighted Average Cost ($/dt)", "Feedstock Weighted Average MC",
             "Trucks Per Day", "Total Feedstock Transportation Cost ($/dt)",
             "Best Formation", "Best Formation State", "Best Formation Province",
             "Raw Distance (mi)", "Transport Cost ($/t)", "Storage Cost ($/t)", "T&S Cost ($/t)",
-            "Feedstock Weighted Average LCA (kg CO2e/dt)", 
+            "Feedstock Weighted Average LCA (kg CO2e/dt)",
             "Total LCA (kg CO2e/kg H2)", "LCOH ($/kg H2)",
         ]
 
@@ -1645,7 +1624,7 @@ if "_map_plants_df" in st.session_state:
         st.dataframe(
             _renamed_df[_display_col_order_present]
             .style.format({_col_rename.get(k, k): v for k, v in _fmt.items()})
-            .pipe(highlight_ts_cols),
+            .pipe(banded_rows),
             use_container_width=True,
             height=400,
         )

@@ -5,4 +5,4 @@ folium
 streamlit-folium
 requests
 numpy
-plotly
+plotly>=6.0

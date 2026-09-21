@@ -25,7 +25,7 @@ def build_choropleth_layer(merged_gdf, states_gdf, counties_gdf, layer_key):
     """
     fig = go.Figure()
 
-    county_trace = px.choropleth_mapbox(
+    county_trace = px.choropleth_map(
         counties_gdf,
         geojson=counties_gdf.__geo_interface__,
         locations=counties_gdf.index,
@@ -41,13 +41,13 @@ def build_choropleth_layer(merged_gdf, states_gdf, counties_gdf, layer_key):
         if geom.geom_type == "MultiLineString":
             for line in geom.geoms:
                 lon, lat = line.xy
-                fig.add_trace(go.Scattermapbox(
+                fig.add_trace(go.Scattermap(
                     lon=list(lon), lat=list(lat), mode="lines",
                     line=dict(color="black", width=1.5), hoverinfo="skip", showlegend=False,
                 ))
         elif geom.geom_type == "LineString":
             lon, lat = geom.xy
-            fig.add_trace(go.Scattermapbox(
+            fig.add_trace(go.Scattermap(
                 lon=list(lon), lat=list(lat), mode="lines",
                 line=dict(color="black", width=1.5), hoverinfo="skip", showlegend=False,
             ))
@@ -58,14 +58,14 @@ def build_choropleth_layer(merged_gdf, states_gdf, counties_gdf, layer_key):
             "≥3 and <5": "#D1E7A0", "≥5 and <10": "#9ACD68", "≥10 and <20": "#62A652",
             "≥20 and <50": "#337C75", "≥50 and <100": "#235A82", "100+": "#1B3D8C",
         }
-        data_fig = px.choropleth_mapbox(
+        data_fig = px.choropleth_map(
             merged_gdf,
             geojson=merged_gdf.__geo_interface__,
             locations=merged_gdf.index,
             color="Plant Category",
             category_orders={"Plant Category": list(category_colors.keys())},
             color_discrete_map=category_colors,
-            mapbox_style="carto-positron",
+            map_style="carto-positron",
             opacity=0.8,
             hover_name="NAME",
             hover_data={"State": True, "Gasification Plants": True,
@@ -107,14 +107,14 @@ def build_choropleth_layer(merged_gdf, states_gdf, counties_gdf, layer_key):
         valid = plot_df["_val"].dropna()
         vmin = float(valid.quantile(0.05)) if len(valid) else 0
         vmax = float(valid.quantile(0.95)) if len(valid) else 1
-        data_fig = px.choropleth_mapbox(
+        data_fig = px.choropleth_map(
             plot_df,
             geojson=plot_df.__geo_interface__,
             locations=plot_df.index,
             color="_val",
             color_continuous_scale=colorscale,
             range_color=[vmin, vmax],
-            mapbox_style="carto-positron",
+            map_style="carto-positron",
             opacity=0.8,
             hover_name="NAME",
             hover_data={"State": True, col_name: ":.2f", "_val": False},
@@ -130,8 +130,8 @@ def build_choropleth_layer(merged_gdf, states_gdf, counties_gdf, layer_key):
         fig.update_layout(coloraxis=data_fig.layout.coloraxis)
 
     fig.update_layout(
-        mapbox_style="carto-positron",
-        mapbox=dict(center={"lat": 37.8, "lon": -96}, zoom=3.5, style="carto-positron"),
+        map_style="carto-positron",
+        map=dict(center={"lat": 37.8, "lon": -96}, zoom=3.5, style="carto-positron"),
         margin={"r": 0, "t": 0, "l": 0, "b": 0},
         paper_bgcolor="rgba(0,0,0,1)",
         plot_bgcolor="rgba(0,0,0,1)",
@@ -1266,7 +1266,7 @@ if apply_filters:
 
     fig = go.Figure()
 
-    county_trace = px.choropleth_mapbox(
+    county_trace = px.choropleth_map(
         counties_gdf,
         geojson=counties_gdf.__geo_interface__,
         locations=counties_gdf.index,
@@ -1282,7 +1282,7 @@ if apply_filters:
         if geom.geom_type == "MultiLineString":
             for line in geom.geoms:
                 lon, lat = line.xy
-                fig.add_trace(go.Scattermapbox(
+                fig.add_trace(go.Scattermap(
                     lon=list(lon),
                     lat=list(lat),
                     mode="lines",
@@ -1292,7 +1292,7 @@ if apply_filters:
                 ))
         elif geom.geom_type == "LineString":
             lon, lat = geom.xy
-            fig.add_trace(go.Scattermapbox(
+            fig.add_trace(go.Scattermap(
                 lon=list(lon),
                 lat=list(lat),
                 mode="lines",
@@ -1301,14 +1301,14 @@ if apply_filters:
                 showlegend=False,
             ))
 
-    biomass_fig = px.choropleth_mapbox(
+    biomass_fig = px.choropleth_map(
         merged,
         geojson=merged.__geo_interface__,
         locations=merged.index,
         color="Plant Category",
         category_orders={"Plant Category": list(category_colors.keys())},
         color_discrete_map=category_colors,
-        mapbox_style="carto-positron",
+        map_style="carto-positron",
         opacity=0.8,
         hover_name="NAME",
         hover_data={
@@ -1327,8 +1327,8 @@ if apply_filters:
         fig.add_trace(t)
 
     fig.update_layout(
-        mapbox_style="carto-positron",
-        mapbox=dict(center={"lat": 37.8, "lon": -96}, zoom=3.5, style="carto-positron"),
+        map_style="carto-positron",
+        map=dict(center={"lat": 37.8, "lon": -96}, zoom=3.5, style="carto-positron"),
         margin={"r": 0, "t": 0, "l": 0, "b": 0},
         paper_bgcolor="rgba(0,0,0,1)",
         plot_bgcolor="rgba(0,0,0,1)",

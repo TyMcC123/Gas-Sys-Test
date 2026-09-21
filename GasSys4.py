@@ -293,7 +293,15 @@ def load_transport_costs(co2tcom_path):
     The key we need is col B (index 1): the "Case number" style key
     Cost col: "First year break-even CO2 price in first year of project" (2018$)
     which is the column containing the per-tonne 2018$ breakeven price.
+
+    Also parses, per flow rate, which capacity factors actually appear in this
+    table (T_COM's own grid — used by the EOR pathway, which only needs a
+    transport-cost match, not a storage-cost match). T_COM's grid is NOT the
+    same as S_COM's: some flow/capacity combinations exist in one but not the
+    other, so this is tracked separately from the S_COM flow→capacity map.
     """
+    from collections import Counter
+
     # Try skiprows=1 first (one description row), fall back to 0
     for skip in [1, 2, 0]:
         try:
@@ -331,7 +339,23 @@ def load_transport_costs(co2tcom_path):
             result = dict(zip(df["key"], df["_cost"]))
             # Sanity check: should have hundreds of entries
             if len(result) > 50:
-                return result
+                # Build the per-flow capacity-factor map from this same key set.
+                # Keys here are "{dist}-{flow}-{cap}" (distance leg, not formation-
+                # specific), so every flow/cap combo present has many distance
+                # points behind it — no frequency threshold needed, just presence.
+                flow_cap_pairs = set()
+                for k in df["key"]:
+                    parts = k.split("-")
+                    if len(parts) == 3:
+                        flow_cap_pairs.add((parts[1], parts[2]))
+                tcom_flow_to_caps = {}
+                for flow, cap in flow_cap_pairs:
+                    tcom_flow_to_caps.setdefault(flow, set()).add(cap)
+                tcom_flow_to_caps = {
+                    flow: sorted(caps, key=lambda x: float(x), reverse=True)
+                    for flow, caps in tcom_flow_to_caps.items()
+                }
+                return result, tcom_flow_to_caps
         except Exception:
             continue
     raise ValueError(
@@ -373,6 +397,7 @@ def load_storage_data(co2scom_path):
 
     # Parse unique valid option values directly from keys in the file
     flow_counts = Counter()
+    flow_cap_counts = Counter()
     pisc_set, cap_set = set(), set()
     for key in result["lookup_key"].dropna():
         parts = key.split("-")
@@ -380,14 +405,33 @@ def load_storage_data(co2scom_path):
             pisc_set.add(parts[0])
             flow_counts[parts[2]] += 1
             cap_set.add(parts[-1])
+            flow_cap_counts[(parts[2], parts[-1])] += 1
 
     # Flow rates appearing 300+ times are real user-selectable options (not site-specific computed values)
     valid_piscs = sorted(pisc_set, key=lambda x: int(x))
     valid_flows = sorted([f for f, c in flow_counts.items() if c >= 300], key=lambda x: float(x))
-    # Only the three clean round capacity factors
+    # Only the three clean round capacity factors (kept as a legacy/fallback list)
     valid_caps = sorted([c for c in cap_set if float(c) in {80, 85, 100}], key=lambda x: float(x))
 
-    return result, valid_piscs, valid_flows, valid_caps
+    # The underlying CO2_S_COM model computes ONE capacity-factor OUTCOME per
+    # flow-rate scenario (e.g. flow rate 2.4 Mtpa only ever resolves to a ~80-82%
+    # capacity factor for these formations, never 100%) — flow and capacity factor
+    # are NOT independent free choices. Build capacity-factor options per flow rate
+    # so the sidebar only ever offers combinations that actually exist in the data;
+    # picking a flow then a capacity factor that never co-occur silently produces
+    # zero T&S matches (and, downstream, empty LCOH). Sorted with the highest
+    # (best-utilization) capacity factor first as the default.
+    flow_to_caps = {}
+    for flow in valid_flows:
+        caps_here = sorted(
+            {cap for (f, cap), cnt in flow_cap_counts.items() if f == flow and cnt >= 5},
+            key=lambda x: float(x),
+            reverse=True,
+        )
+        if caps_here:
+            flow_to_caps[flow] = caps_here
+
+    return result, valid_piscs, valid_flows, valid_caps, flow_to_caps
 
 # ---------------------------------------------
 # 🧮 CO2 T&S ENGINE
@@ -656,16 +700,18 @@ source_site_coords_path = f"{GITHUB_RAW}/source_site_coords.csv"
 _load_errors = []
 
 try:
-    transport_cost_table = load_transport_costs(co2tcom_path)
+    transport_cost_table, tcom_flow_to_caps = load_transport_costs(co2tcom_path)
 except Exception as e:
     transport_cost_table = {}
+    tcom_flow_to_caps = {"2.4": ["100"]}
     _load_errors.append(f"CO2_T_COM failed to load ({co2tcom_path}): {e}")
 
 try:
-    storage_df, scom_piscs, scom_flows, scom_caps = load_storage_data(co2scom_path)
+    storage_df, scom_piscs, scom_flows, scom_caps, scom_flow_to_caps = load_storage_data(co2scom_path)
 except Exception as e:
     storage_df = pd.DataFrame(columns=["lookup_key", "capacity_flag", "cost_2018", "cost_2023"])
     scom_piscs, scom_flows, scom_caps = ["10", "15", "50"], ["2.4"], ["100"]
+    scom_flow_to_caps = {"2.4": ["100"]}
     _load_errors.append(f"CO2_S_COM failed to load ({co2scom_path}): {e}")
 
 try:
@@ -780,11 +826,33 @@ ts_flow_rate = st.sidebar.selectbox(
     help="Options reflect values available in the loaded S_COM file."
 )
 
+# The capacity factor achievable is a computed OUTCOME of the selected flow rate,
+# not an independent free choice — e.g. flow rate 2.4 Mtpa never reaches a 100%
+# capacity factor for these formations, it only ever resolves to ~80-82%. Offering
+# a fixed {80/85/100} list regardless of flow rate lets the user pick a combination
+# that doesn't exist in the data, which silently zeroes out every T&S match (and,
+# downstream, LCOH). So these options are recomputed for whichever flow rate is
+# currently selected, sorted with the best (highest) capacity factor first.
+#
+# SALINE and EOR draw from different tables: SALINE storage cost comes from
+# S_COM (constrained by each formation's actual storage capacity, so its
+# flow/capacity grid is sparse), while EOR storage cost comes straight from
+# co2_e_com (no capacity-factor dependency at all) and only needs a transport
+# match against T_COM, whose flow/capacity grid is different (usually richer)
+# than S_COM's. So which map to use depends on the selected pathway.
+if storage_formation_type == "EOR":
+    _caps_for_selected_flow = tcom_flow_to_caps.get(ts_flow_rate, scom_caps)
+else:
+    _caps_for_selected_flow = scom_flow_to_caps.get(ts_flow_rate, scom_caps)
+if not _caps_for_selected_flow:
+    _caps_for_selected_flow = scom_caps or ["100"]
+
 ts_capacity_factor = st.sidebar.selectbox(
     "Pipeline Capacity Factor (%)",
-    scom_caps,
-    index=scom_caps.index("100") if "100" in scom_caps else 0,
+    _caps_for_selected_flow,
+    index=0,
     format_func=lambda x: f"{x}%",
+    help="Only capacity factors actually modeled for the selected flow rate (and storage pathway) are shown — not every flow rate reaches 100%.",
 )
 
 pisc_years = st.sidebar.selectbox(
